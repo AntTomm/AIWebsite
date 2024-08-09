@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server"
 import OpenAI from 'openai'
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+
 
 const systemPrompt = `
 Our mission is to provide users with an interactive platform for real-time technical Data Structures and Algorithms (DSA) interview practice with AI. To ensure you have the best experience, here are some guidelines and assistance options available for common issues and inquiries.
@@ -33,31 +35,37 @@ Avoid technical jargon unless necessary, and ensure your explanations are precis
 `;
 
 export async function POST(req) {
-  const openai = new OpenAI()
-  const data = await req.json()
+  if (!process.env.OPENAI_API_KEY) {
+    return NextResponse.json({ error: "OPENAI_API_KEY is missing" }, { status: 500 });
+  }
+
+  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+
+  const data = await req.json();
   const completion = await openai.chat.completions.create({
     messages: [{ role: 'system', content: systemPrompt }, ...data],
-    model: 'gpt-4o',
+    model: 'gpt-4o',  
     stream: true,
-  })
+  });
 
   const stream = new ReadableStream({
     async start(controller) {
       const encoder = new TextEncoder();
       try {
         for await (const chunk of completion) {
-          const content = chunk.choices[0]?.delta?.content
+          const content = chunk.choices[0]?.delta?.content;
           if (content) {
             controller.enqueue(encoder.encode(content));
           }
         }
       } catch (err) {
+        console.error('Streaming error:', err);
         controller.error(err);
       } finally {
         controller.close();
       }
     }
-  })
+  });
 
-  return new NextResponse(stream)
+  return new NextResponse(stream);
 }
